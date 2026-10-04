@@ -11,22 +11,38 @@ rm(list=ls())
 #     WY2019 (normal/wet recovery). Spans full hydrological state space.
 #     3 of 14 years = 21% held out, consistent with 80/20 guideline.
 #     Defensible because no temporal lag features exist in predictor set.
-#   - log1p target transformation: corrects right-skewed distribution and
-#     zero-inflated curtailment months. Prevents RMSE from over-penalising
-#     large-event errors. Back-transform with expm1() for original-scale output.
-#   - H2O internal R2/RMSE are on log scale; original-scale metrics computed
-#     manually after back-transformation -- report those in manuscript.
+#   - Target on the original scale (acre-feet), no transformation. Negative
+#     predictions are set to zero. H2O and manual R2/RMSE are both on the
+#     original scale.
+#
+# Changes, Oct 2026 (CMIP6 temperature unit):
+#   - Projection inputs must be in the training units: tmean in deg C (DAYMET),
+#     et_mean and prcp_sum in mm month-1, swe_mean in mm.
+#   - CA_wtr_HUC8_all_ssp370_CMIP6.csv must be the file regenerated with the
+#     corrected 3_caladapt_cmip6_create_input_data_rev.R (WRF t2 in Kelvin
+#     minus 273.15). The earlier file held tmean as K x 0.1.
+#   - CMIP6 et_mean is the Cal-Adapt WRF variable etrans_sfc as delivered.
+#   - check_predictors() runs on every projection file before training. It
+#     stops the run when a predictor is missing or when tmean or prcp_sum are
+#     not on the training scale, and warns when mean et_mean differs from the
+#     OpenET training mean by more than a factor of 2.
+#   - The H2O version is printed to the log. Final run: H2O 3.44.0.3, R 4.5.2.
+#     The April 2026 run (H2O 3.46.0.7) gave identical models.
+#   - timetk, tidyquant and ggplot2 are no longer loaded (not used here).
 
 library(h2o)
-library(timetk)
-library(tidyquant)
 library(dplyr)
 library(tibble)
-library(ggplot2)
 library(lubridate)
 
 num       <- 160617
 input.dir <- "/projects/mich9173/CA_wtr_div/"
+
+# CMIP6 projection input (tmean in deg C, see header)
+cmip6.file <- "CA_wtr_HUC8_all_ssp370_CMIP6.csv"
+
+# Output folder under output/prediction/.
+run.folder <- "2021"
 
 # -----------------------------------------------------------------------
 # 1. Load observational data
@@ -62,8 +78,7 @@ wtr.sub <- wtr.data %>%
 cat(sprintf("Eligible forested CA HUC8s (hydropower): %d\n",
             length(unique(wtr.sub$huc8))))
 
-# log1p-transform target
-# wtr.sub$pw_log     <- base::log1p(wtr.sub$Power_diverted)
+# Target: Power_diverted on the original scale (no transformation)
 # Walk-forward fold index (non-consecutive after removing test years is fine)
 wtr.sub$foldnumber <- wtr.sub$year_wtr - 2010L
 
@@ -95,20 +110,95 @@ cat(sprintf("Train: %d years, %d rows | Test: %d years, %d rows\n",
             length(unique(test_wtr$year_wtr)),  nrow(test_wtr)))
 
 # -----------------------------------------------------------------------
+# 4b. Predictors, and check of all projection inputs before training
+# -----------------------------------------------------------------------
+x <- c("month", "quater",
+       "mng_medhigh_10yr_pct", "BurnSev34_10yr_pct",
+       "et_mean", "tmean", "prcp_sum", "swe_mean",
+       "inflow_wtr_mm", "sum_cap_af", "elevation",
+       "pop_den", "weighted_median_income", "project")
+
+# Projection inputs against the observed (training) data.
+# Stops when a predictor is missing, when mean tmean is outside -5 to 25
+# (deg C), or when mean prcp_sum differs from the observed mean by more than
+# a factor of 3. With show = TRUE it prints the full comparison and warns
+# when mean et_mean differs from the observed mean by more than a factor of 2.
+check_predictors <- function(train_df, proj_df, vars, label, show = FALSE) {
+  missing_vars <- setdiff(vars, names(proj_df))
+  if (length(missing_vars) > 0) {
+    stop(label, ": predictors missing from the projection file: ",
+         paste(missing_vars, collapse = ", "))
+  }
+  num_vars <- vars[sapply(vars, function(v) {
+    is.numeric(train_df[[v]]) && is.numeric(proj_df[[v]])
+  })]
+  chk <- do.call(rbind, lapply(num_vars, function(v) {
+    tr <- range(train_df[[v]], na.rm = TRUE)
+    pv <- proj_df[[v]]
+    data.frame(var         = v,
+               train_min   = tr[1],
+               train_mean  = mean(train_df[[v]], na.rm = TRUE),
+               train_max   = tr[2],
+               proj_min    = min(pv, na.rm = TRUE),
+               proj_mean   = mean(pv, na.rm = TRUE),
+               proj_max    = max(pv, na.rm = TRUE),
+               pct_outside = 100 * mean(pv < tr[1] | pv > tr[2], na.rm = TRUE))
+  }))
+  chk$mean_ratio <- chk$proj_mean / chk$train_mean
+  t_mean  <- chk$proj_mean[chk$var == "tmean"]
+  p_ratio <- chk$mean_ratio[chk$var == "prcp_sum"]
+  e_ratio <- chk$mean_ratio[chk$var == "et_mean"]
+  bad <- character(0)
+  if (t_mean < -5 || t_mean > 25)        bad <- c(bad, "tmean")
+  if (p_ratio < 1 / 3 || p_ratio > 3)    bad <- c(bad, "prcp_sum")
+  if (show || length(bad) > 0) {
+    op <- options(scipen = 20)
+    print(cbind(var = chk$var, round(chk[, -1], 2)), row.names = FALSE)
+    options(op)
+  }
+  if (length(bad) > 0) {
+    stop(label, ": units do not match the training data for: ",
+         paste(bad, collapse = ", "))
+  }
+  if (show && (e_ratio < 0.5 || e_ratio > 2)) {
+    warning(label, ": mean et_mean is ", round(e_ratio, 2),
+            " x the training mean.", call. = FALSE)
+  }
+  invisible(chk)
+}
+
+GCM.list <- c("CanESM2","CNRM-CM5","HadGEM2-ES","MIROC5")
+list.prj <- c("ssp1_rcp45","ssp3_rcp85","ssp2_rcp85","ssp5_rcp85")
+proj.dir <- paste0(input.dir, "input/projection/")
+
+prep_proj <- function(file, min_wy) {
+  df <- read.csv(paste0(proj.dir, file), header = TRUE, stringsAsFactors = FALSE)
+  df$quater <- (df$month - 1) %/% 3 + 1
+  df[df$huc8 %in% huc8.area$huc8 & df$year_wtr > min_wy, ]
+}
+
+for (a in seq_along(GCM.list)) {
+  for (numi in seq_along(list.prj)) {
+    check_predictors(wtr.sub,
+                     prep_proj(paste0("CA_wtr_HUC8_all_", list.prj[numi], "_", GCM.list[a], ".csv"), 2010),
+                     x, paste("CMIP5", GCM.list[a], list.prj[numi]),
+                     show = (a == 1 & numi == 1))
+  }
+}
+check_predictors(wtr.sub, prep_proj(cmip6.file, 2014), x, "CMIP6 all GCMs", show = TRUE)
+cat("Projection inputs checked.\n")
+
+# -----------------------------------------------------------------------
 # 5. Start H2O
 # -----------------------------------------------------------------------
 h2o.init(max_mem_size = "32G", nthreads = -1, port = 61716)
+cat("H2O version:", h2o.getVersion(), "\n")
 
 train_h2o <- as.h2o(train_wtr)
 test_h2o  <- as.h2o(test_wtr)
 
 # year_wtr removed: physical variables encode drought state for projection
 y <- "Power_diverted"
-x <- c("month", "quater",
-       "mng_medhigh_10yr_pct", "BurnSev34_10yr_pct",
-       "et_mean", "tmean", "prcp_sum", "swe_mean",
-       "inflow_wtr_mm", "sum_cap_af", "elevation",
-       "pop_den", "weighted_median_income", "project")
 
 # -----------------------------------------------------------------------
 # 6. AutoML training
@@ -157,7 +247,7 @@ error_wtr_train <- wtr.sub[, c("huc8","year","month","year_wtr","Power_diverted"
   filter(!year_wtr %in% test_years) %>%
   add_column(pred = as_tibble(pred_h2o_train)$predict) %>%
   rename(actual = Power_diverted) %>%
-  mutate(pred      = pmax(pred, 0), 
+  mutate(pred      = pmax(pred, 0),
          error     = actual - pred,
          error_pct = if_else(actual != 0, error / actual, NA_real_))
 
@@ -211,7 +301,7 @@ error_wtr_yr_train <- error_wtr_train %>%
 # -----------------------------------------------------------------------
 # 8. Write outputs and save model
 # -----------------------------------------------------------------------
-output.dir <- paste0(input.dir, "output/prediction/2021/")
+output.dir <- paste0(input.dir, "output/prediction/", run.folder, "/")
 if (!dir.exists(output.dir)) dir.create(output.dir, recursive = TRUE)
 setwd(output.dir)
 
@@ -227,7 +317,7 @@ model_path <- h2o.saveModel(automl_leader, path=model_dir, force=TRUE)
 cat("Leader model saved:", model_path, "\n")
 
 # -----------------------------------------------------------------------
-# 9. CMIP5 projections (predictions back-transformed to original AF)
+# 9. CMIP5 projections (predictions on the original scale, AF)
 # -----------------------------------------------------------------------
 GCM.list  <- c("CanESM2","CNRM-CM5","HadGEM2-ES","MIROC5")
 list.prj  <- c("ssp1_rcp45","ssp3_rcp85","ssp2_rcp85","ssp5_rcp85")
@@ -264,12 +354,12 @@ for (a in seq_along(GCM.list)) {
 }
 
 # -----------------------------------------------------------------------
-# 10. CMIP6 projections
+# 10. CMIP6 projections (WRF; tmean in deg C, et_mean as delivered)
 # -----------------------------------------------------------------------
 cmip6.dir <- paste0(output.dir, "cmip6/")
 if (!dir.exists(cmip6.dir)) dir.create(cmip6.dir, recursive = TRUE)
 setwd(paste0(input.dir, "input/projection/"))
-wtr.pred6 <- read.csv("CA_wtr_HUC8_all_ssp370_CMIP6.csv", header=TRUE, stringsAsFactors=FALSE)
+wtr.pred6 <- read.csv(cmip6.file, header=TRUE, stringsAsFactors=FALSE)
 wtr.pred6$date   <- as.Date(wtr.pred6$date)
 wtr.pred6$quater <- dplyr::recode(wtr.pred6$month,
                     `1`=1,`2`=1,`3`=1,`4`=2,`5`=2,`6`=2,
