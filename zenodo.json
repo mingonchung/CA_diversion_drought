@@ -1,0 +1,27 @@
+{
+  "title": "Code and derived data for: Forest thinning and wildfire do not increase surface-water diversions in California",
+  "upload_type": "software",
+  "version": "1.2.1",
+  "description": "<p>Conditional permutation importance, streamflow analyses, and H2O AutoML projections of hydropower and consumptive surface-water diversions in California's HUC8 watersheds, water years 2011 to 2024, with CMIP5 and CMIP6 projections to 2070. Includes the HUC8 input tables and projection inputs. Version 1.2.1 adds the README and the license. Code and data are identical to version 1.2.0, which reproduces the revised manuscript submitted to Nature Communications.</p>",
+  "creators": [
+    {"name": "Chung, Min Gon", "affiliation": "Cooperative Institute for Research in Environmental Sciences, University of Colorado Boulder"},
+    {"name": "Goulden, Michael L."},
+    {"name": "Guo, Han"},
+    {"name": "Safeeq, Mohammad"},
+    {"name": "Cui, Guotao"},
+    {"name": "Ward, Kayleigh"},
+    {"name": "Bales, Roger C."}
+  ],
+  "license": "MIT",
+  "keywords": [
+    "surface-water diversions",
+    "forest thinning",
+    "wildfire",
+    "drought",
+    "nature-based solutions",
+    "water rights",
+    "conditional permutation importance",
+    "AutoML",
+    "California"
+  ]
+}
