@@ -2,107 +2,113 @@
 
 Code and derived data for Chung et al., "Forest thinning and wildfire do not increase surface-water diversions in California", *Nature Communications* (in revision).
 
-Conditional permutation importance (CPI), streamflow analyses, and AutoML projections of hydropower and consumptive surface-water diversions in California's HUC8 watersheds, water years 2011–2024, with projections to 2070.
+Conditional permutation importance (CPI), streamflow analyses, and AutoML projections of hydropower and consumptive surface-water diversions across California's HUC8 watersheds, water years 2011–2024, with projections to 2070.
 
-Version 1.2.1 adds this README and the license. Code and data are identical to version 1.2.0 (DOI 10.5281/zenodo.23129939), which reproduces the revised manuscript. Version 1.1.0 (DOI 10.5281/zenodo.20724105) holds the code submitted in June 2026.
+## Versions
 
-## Changes from version 1.1.0
-
-- CMIP6 air temperature in the projection input converted from K to °C (`Input_csv/Simulation/CA_wtr_HUC8_all_ssp370_CMIP6.csv.gz`).
-- Both AutoML scripts check the units of every projection input before training.
-- HUC8 table `Input_csv/CA_wtr_HUC8_all_040226.csv` added. Both AutoML scripts read it.
+| Version | DOI | Contents |
+|---|---|---|
+| 1.2.1 | This release | README and licence added. Code and data are those of version 1.2.0 |
+| 1.2.0 | 10.5281/zenodo.23129939 | CMIP6 air temperature in °C, revised AutoML scripts, HUC8 table `CA_wtr_HUC8_all_040226.csv` added |
+| 1.1.0 | 10.5281/zenodo.20724105 | First revision. CMIP6 air temperature not converted from K |
 
 ## Repository layout
 
 ```
-RF_CPI/      random forests, CPI, and partial dependence (four watershed groups)
-NLDI/        streamflow analyses in NLDI gauge catchments
+RF_CPI/      random forests, CPI, and partial dependence (36 scripts)
+NLDI/        streamflow-to-precipitation (Q/PPT) and diversion-to-streamflow (D/Q) analyses
 AutoML/      H2O AutoML training and CMIP5 and CMIP6 projections
 Input_csv/   HUC8 input tables and projection inputs
 ```
 
+| Folder | Manuscript items |
+|---|---|
+| `RF_CPI/` | Figs 6 and 7, Supplementary Figs 3–5 |
+| `NLDI/` | Figs 4 and 5, Supplementary Fig. 10 |
+| `AutoML/` | Fig. 8, Supplementary Figs 6 and 11 |
+
 Figure scripts are not included.
 
-## Analyses
+Script names in `RF_CPI/` combine three labels.
 
-| Folder | Scripts | Output |
-|---|---|---|
-| `RF_CPI/<group>/` | `1_cforest_*` | Conditional-inference random forest (`party::cforest`, mtry = 6, ntree = 1,000), saved as `.RData` |
-| | `2_permimp_*` | CPI (`permimp`, threshold 0.80), per tree and mean |
-| | `3_pardep_*` | Partial dependence for each predictor (`edarf`) |
-| `NLDI/` | `1_3a_wtr_div_nldi_spatial.R` | Thinning, wildfire, and diversion records intersected with NLDI catchments. Station lists |
-| | `1_3b_wtr_div_nldi_analysis.R` | Monthly streamflow, Q/PPT anomaly, D/Q ratio, and water-balance ET against OpenET |
-| `AutoML/` | `4_wtr_h2o_pw_2070_frst_160617.R` | Hydropower model, validation statistics, CMIP5 and CMIP6 predictions |
-| | `4_wtr_h2o_con_2070_frst_160617.R` | Consumptive model (log1p target), validation statistics, CMIP5 and CMIP6 predictions |
-
-File-name codes:
-
-| Code | Meaning |
+| Label | Meaning |
 |---|---|
-| `frst`, `nfrst` | Forested (20% forest cover or more) and non-forested HUC8 watersheds |
-| `dr`, `ndr` | Drought years (WY2012–2015, WY2020–2022) and non-drought years |
-| `pw`, `con` | Hydropower and consumptive diversion |
-| `nprj` | Sensitivity analysis excluding HUC8s with SWP or CVP infrastructure (forested groups only) |
+| `con`, `pw` | Consumptive diversion, hydropower diversion |
+| `frstdr`, `frstndr`, `nfrstdr`, `nfrstndr` | Forested or non-forested watersheds, drought or non-drought years |
+| `_nprj` | Sensitivity analysis without SWP/CVP watersheds (forested models only) |
 
-AutoML holds out WY2014, WY2017, and WY2019 as the test set and trains up to 50 models (deep learning excluded, seed 160617).
+## 1. System requirements
 
-## Input_csv/
+- R 4.5.2. H2O 3.44.0.3 for the AutoML scripts (H2O needs Java). H2O 3.46.0.7 gave identical models.
+- `RF_CPI/`: `party`, `permimp`, `edarf`, `dplyr`, `tidyverse`, `tibble`, `reshape2`, `Rmisc`.
+- `AutoML/`: `h2o`, `dplyr`, `tibble`, `lubridate`.
+- `NLDI/`: `sf`, `dplyr`, `tidyr`, `readr`, `stringr`, `lubridate`, `reshape2`, `zoo`, `RcppRoll`.
+- Package versions: TODO, from `sessionInfo()`.
+- Tested on: TODO, operating systems of the laptop and the cluster.
+- No non-standard hardware. The AutoML scripts start H2O with 32 GB of memory.
 
-| File | Contents |
-|---|---|
-| `CA_wtr_HUC8_all_var_month_040726.csv` | Monthly HUC8 model table, WY2011–2024: two diversion targets and 12 predictors |
-| `CA_wtr_HUC8_all_040226.csv` | Monthly HUC8 source table, 2010–2024, with HUC8 area |
-| `Simulation/CA_wtr_HUC8_all_<scenario>_<GCM>.csv.gz` | CMIP5 projection inputs, 4 scenarios × 4 GCMs, 2010–2070 |
-| `Simulation/CA_wtr_HUC8_all_ssp370_CMIP6.csv.gz` | CMIP6 projection input, SSP3-7.0, 8 GCMs, WY2015–2070 |
-
-| Variable | Description | Unit |
-|---|---|---|
-| `Power_diverted`, `consumtive_diverted` | Hydropower and consumptive diversion | acre-feet |
-| `mng_medhigh_10yr_pct` | Medium- and high-intensity thinning, 10-year cumulative | % of watershed area |
-| `BurnSev34_10yr_pct` | Medium- and high-severity wildfire, 10-year cumulative | % of watershed area |
-| `et_mean`, `prcp_sum` | Evapotranspiration, precipitation | mm month-1 |
-| `swe_mean`, `inflow_wtr_mm` | Snow water equivalent, net inflow | mm |
-| `tmean` | Air temperature | °C |
-| `sum_cap_af` | Reservoir capacity | acre-feet |
-| `elevation` | Elevation | m |
-| `pop_den` | Population density | persons km-2 |
-| `weighted_median_income` | Median income | US $ |
-| `project` | SWP or CVP infrastructure | 0, 1 |
-
-## System requirements
-
-R 4.5.2 and H2O 3.44.0.3 for the AutoML runs. [fill: R version for RF_CPI and NLDI, if different]
-
-Packages: `party`, `permimp`, `edarf`, `h2o`, `sf`, `dplyr`, `tidyverse`, `tidyr`, `tibble`, `readr`, `stringr`, `lubridate`, `reshape2`, `Rmisc`, `zoo`, `RcppRoll`. [fill: versions from sessionInfo()]
-
-Tested on Linux (SLURM cluster) and Windows. The AutoML scripts start H2O with 32 GB of memory. No non-standard hardware is required.
-
-## Installation
+## 2. Installation guide
 
 ```r
-install.packages(c("party", "permimp", "h2o", "sf", "tidyverse", "reshape2",
-                   "Rmisc", "zoo", "RcppRoll", "devtools"))
+install.packages(c("party", "permimp", "dplyr", "tidyverse", "tibble", "reshape2",
+                   "Rmisc", "h2o", "lubridate", "sf", "tidyr", "readr", "stringr",
+                   "zoo", "RcppRoll", "devtools"))
 devtools::install_github("zmjones/edarf", subdir = "pkg")
 ```
 
-Installation takes [fill: minutes] on a desktop computer.
+Typical install time: TODO.
 
-## Running
+## 3. Demo
 
-1. Set `input.dir` at the top of each script (the directory variables in the `NLDI/` scripts).
-2. Copy `Input_csv/*.csv` to `<input.dir>/input/`.
-3. Decompress `Input_csv/Simulation/*.csv.gz` into `<input.dir>/input/projection/`.
-4. Create `<input.dir>/output/varimp/<group>/` and `<input.dir>/output/pardep/<group>/`, where `<group>` is `frstdr`, `frstndr`, `nfrstdr`, or `nfrstndr`.
-5. In each `RF_CPI/<group>/` folder, run `1_cforest_*`, then `2_permimp_*`, then `3_pardep_*`. The partial-dependence scripts take the predictor index as an argument (SLURM array 1–12, or 1–11 for `nprj`).
-6. Run the two `AutoML/` scripts. Each writes to `<input.dir>/output/prediction/`.
+The input tables in `Input_csv/` are the full analysis tables, so the demo is one model of the main analysis (consumptive diversion, forested watersheds, drought years).
 
-Demo: `RF_CPI/nonforest_20pct_drought/1_cforest_wtr_pw_11_24_non0_nfrstdr.R` followed by `2_permimp_wtr_pw_11_24_non0_nfrstdr.R` runs on the included input table and writes the CPI values to `output/varimp/nfrstdr/`. Run time: [fill].
+1. Create a working directory with this layout.
 
-Full run times: [fill: one cforest and permimp job; one AutoML script].
+```
+<root>/input/                 the two CSV files of Input_csv/
+<root>/input/projection/      the files of Input_csv/Simulation/, uncompressed
+<root>/output/varimp/frstdr/
+<root>/output/pardep/frstdr/
+```
+
+2. Set `input.dir` at the top of each script to `<root>/`.
+
+3. Run the three steps.
+
+```
+Rscript RF_CPI/forest_20pct_drought/1_cforest_wtr_con_11_24_non0_frstdr.R
+Rscript RF_CPI/forest_20pct_drought/2_permimp_wtr_con_11_24_non0_frstdr.R
+Rscript RF_CPI/forest_20pct_drought/3_pardep_wtr_con_11_24_non0_frstdr.R 1
+```
+
+Expected output:
+
+- Step 1 prints 4,800 rows in the model dataset and saves `rf_con_all_huc8_non0_6_1000_pct_frstdr_11_24.RData` in `<root>/input/`.
+- Step 2 writes three CSV files to `<root>/output/varimp/frstdr/`. The file `permimp_cond_avg_...csv` holds the CPI of each predictor. Among the 12 predictors, `prcp_sum` ranks first, followed by `BurnSev34_10yr_pct`, `et_mean`, and `mng_medhigh_10yr_pct` (Fig. 6d).
+- Step 3 writes `pardep_rf_con_mng_medhigh_10yr_pct_huc8_6_1000_non0_pct_frstdr_11_24.csv` to `<root>/output/pardep/frstdr/`.
+
+Expected run time: TODO.
+
+## 4. Instructions for use
+
+**RF_CPI.** Each of the four folders holds one watershed group and drought condition. Run step 1 (`cforest`, mtry = 6, ntree = 1,000), step 2 (`permimp`, conditional, threshold 0.80), and step 3 (`partial_dependence`) for `con` and `pw`. Step 3 takes the predictor index (1–12) as its argument and ran as a SLURM array job. Create `output/varimp/<label>/` and `output/pardep/<label>/` before running.
+
+**AutoML.** `4_wtr_h2o_pw_2070_frst_160617.R` (hydropower) and `4_wtr_h2o_con_2070_frst_160617.R` (consumptive) train on water years 2011–2024, hold out water years 2014, 2017, and 2019, and project to 2070. Each script checks the units of every projection file before training. Outputs go to `<root>/output/prediction/<run.folder>/`: performance tables, the saved leader model, and predictions in `cmip5/` and `cmip6/`. Settings: 50 models, seed 160617, deep learning excluded.
+
+**NLDI.** Run `1_3a_wtr_div_nldi_spatial.R`, then `1_3b_wtr_div_nldi_analysis.R`. Both need the raw inputs (USGS streamflow, NLDI catchments, eWRIMS diversion points, FACTS and CAL FIRE thinning records, burn severity, OpenET, and DAYMET). Set the directory variables at the top of each script.
 
 ## Input data
 
-The `NLDI/` scripts read source datasets that are publicly available and are not redistributed. Sources, periods, and resolutions are listed in Supplementary Table 1 of the paper.
+Raw input datasets are publicly available and are not redistributed. Sources, periods, and resolutions are listed in Supplementary Table 1 of the manuscript.
+
+| File | Contents |
+|---|---|
+| `CA_wtr_HUC8_all_var_month_040726.csv` | Monthly diversions and the 12 predictors for 140 HUC8s, water years 2011–2024. Input to `RF_CPI/` and `AutoML/` |
+| `CA_wtr_HUC8_all_040226.csv` | Monthly HUC8 table for 2010–2024 with watershed area. Read by the AutoML scripts |
+| `Simulation/CA_wtr_HUC8_all_<scenario>_<GCM>.csv.gz` | CMIP5 projection inputs to 2070, 4 scenarios × 4 GCMs |
+| `Simulation/CA_wtr_HUC8_all_ssp370_CMIP6.csv.gz` | CMIP6 projection inputs for water years 2015–2070, SSP3-7.0, 8 GCMs |
+
+Diversions (`Power_diverted`, `consumtive_diverted`) and reservoir capacity are in acre-feet. Precipitation and ET are in mm per month, SWE and inflow in mm, air temperature in °C, population density in persons per km², and thinning and wildfire extent in % of watershed area.
 
 ## License
 
