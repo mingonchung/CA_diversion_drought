@@ -39,61 +39,58 @@ Script names in `RF_CPI/` combine three labels.
 
 ## 1. System requirements
 
-- R 4.5.2. H2O 3.44.0.3 for the AutoML scripts (H2O needs Java). H2O 3.46.0.7 gave identical models.
-- `RF_CPI/`: `party`, `permimp`, `edarf`, `dplyr`, `tidyverse`, `tibble`, `reshape2`, `Rmisc`.
-- `AutoML/`: `h2o`, `dplyr`, `tibble`, `lubridate`.
-- `NLDI/`: `sf`, `dplyr`, `tidyr`, `readr`, `stringr`, `lubridate`, `reshape2`, `zoo`, `RcppRoll`.
-- Package versions: TODO, from `sessionInfo()`.
-- Tested on: TODO, operating systems of the laptop and the cluster.
-- No non-standard hardware. The AutoML scripts start H2O with 32 GB of memory.
+Tested on Rocky Linux 8.10 (Alpine cluster, University of Colorado Boulder) with R 4.5.2. H2O needs Java (OpenJDK 25.0.1 used). H2O 3.46.0.7 gave identical models. No non-standard hardware is required. The AutoML scripts start H2O with 32 GB of memory.
+
+| Folder | Packages (version) |
+|---|---|
+| `RF_CPI/` | `party` (1.3.21), `permimp` (1.1.0.9000), `edarf` (1.1.1), `dplyr` (1.2.1), `tidyverse` (2.0.0), `tibble` (3.3.1), `reshape2` (1.4.5), `Rmisc` (1.5.1) |
+| `AutoML/` | `h2o` (3.44.0.3), `dplyr` (1.2.1), `tibble` (3.3.1), `lubridate` (1.9.5) |
+| `NLDI/` | `sf` (1.1.2), `dplyr` (1.2.1), `tidyr` (1.3.2), `readr` (2.2.0), `stringr` (1.6.0), `lubridate` (1.9.5), `reshape2` (1.4.5), `zoo` (1.8.15), `RcppRoll` (0.3.2) |
 
 ## 2. Installation guide
 
 ```r
-install.packages(c("party", "permimp", "dplyr", "tidyverse", "tibble", "reshape2",
-                   "Rmisc", "h2o", "lubridate", "sf", "tidyr", "readr", "stringr",
-                   "zoo", "RcppRoll", "devtools"))
+install.packages(c("party", "dplyr", "tidyverse", "tibble", "reshape2", "Rmisc",
+                   "h2o", "lubridate", "sf", "tidyr", "readr", "stringr", "zoo",
+                   "RcppRoll", "devtools"))
+devtools::install_github("ddebeer/permimp")
 devtools::install_github("zmjones/edarf", subdir = "pkg")
 ```
 
-Typical install time: TODO.
+Typical install time: about 4 minutes.
 
 ## 3. Demo
 
-The input tables in `Input_csv/` are the full analysis tables, so the demo is one model of the main analysis (consumptive diversion, forested watersheds, drought years).
+The input tables in `Input_csv/` are the full analysis tables, so the demo is the hydropower AutoML run of the manuscript.
 
 1. Create a working directory with this layout.
 
 ```
 <root>/input/                 the two CSV files of Input_csv/
 <root>/input/projection/      the files of Input_csv/Simulation/, uncompressed
-<root>/output/varimp/frstdr/
-<root>/output/pardep/frstdr/
 ```
 
-2. Set `input.dir` at the top of each script to `<root>/`.
+2. Set `input.dir` at the top of the script to `<root>/`.
 
-3. Run the three steps.
+3. Run the script.
 
 ```
-Rscript RF_CPI/forest_20pct_drought/1_cforest_wtr_con_11_24_non0_frstdr.R
-Rscript RF_CPI/forest_20pct_drought/2_permimp_wtr_con_11_24_non0_frstdr.R
-Rscript RF_CPI/forest_20pct_drought/3_pardep_wtr_con_11_24_non0_frstdr.R 1
+Rscript AutoML/4_wtr_h2o_pw_2070_frst_160617.R
 ```
 
-Expected output:
+Expected output in `<root>/output/prediction/2021/`:
 
-- Step 1 prints 4,800 rows in the model dataset and saves `rf_con_all_huc8_non0_6_1000_pct_frstdr_11_24.RData` in `<root>/input/`.
-- Step 2 writes three CSV files to `<root>/output/varimp/frstdr/`. The file `permimp_cond_avg_...csv` holds the CPI of each predictor. Among the 12 predictors, `prcp_sum` ranks first, followed by `BurnSev34_10yr_pct`, `et_mean`, and `mng_medhigh_10yr_pct` (Fig. 6d).
-- Step 3 writes `pardep_rf_con_mng_medhigh_10yr_pct_huc8_6_1000_non0_pct_frstdr_11_24.csv` to `<root>/output/pardep/frstdr/`.
+- Five CSV files with observed and predicted diversions and the performance of the model on the training and test sets (`h2o_pw_*_160617_frst.csv`).
+- The saved leader model in `models/`, a gradient-boosting machine.
+- Predictions in `cmip5/` (32 files, 4 scenarios × 4 GCMs) and `cmip6/` (16 files, 8 GCMs).
 
-Expected run time: TODO.
+Expected run time: 3 min 35 s on 24 cores. The script starts H2O with 32 GB of memory (`max_mem_size`), which can be lowered on a desktop computer.
 
 ## 4. Instructions for use
 
-**RF_CPI.** Each of the four folders holds one watershed group and drought condition. Run step 1 (`cforest`, mtry = 6, ntree = 1,000), step 2 (`permimp`, conditional, threshold 0.80), and step 3 (`partial_dependence`) for `con` and `pw`. Step 3 takes the predictor index (1–12) as its argument and ran as a SLURM array job. Create `output/varimp/<label>/` and `output/pardep/<label>/` before running.
+**RF_CPI.** Each of the four folders holds one watershed group and drought condition. Run step 1 (`cforest`, mtry = 6, ntree = 1,000), step 2 (`permimp`, conditional, threshold 0.80), and step 3 (`partial_dependence`) for `con` and `pw`. Step 3 takes the predictor index (1–12) as its argument and ran as a SLURM array job. Create `output/varimp/<label>/` and `output/pardep/<label>/` before running. These steps are compute-intensive: one partial-dependence task took 1.6–2.7 hours on 16 cores with 60 GB of memory.
 
-**AutoML.** `4_wtr_h2o_pw_2070_frst_160617.R` (hydropower) and `4_wtr_h2o_con_2070_frst_160617.R` (consumptive) train on water years 2011–2024, hold out water years 2014, 2017, and 2019, and project to 2070. Each script checks the units of every projection file before training. Outputs go to `<root>/output/prediction/<run.folder>/`: performance tables, the saved leader model, and predictions in `cmip5/` and `cmip6/`. Settings: 50 models, seed 160617, deep learning excluded.
+**AutoML.** `4_wtr_h2o_pw_2070_frst_160617.R` (hydropower) and `4_wtr_h2o_con_2070_frst_160617.R` (consumptive) train on water years 2011–2024, hold out water years 2014, 2017, and 2019, and project to 2070. Each script checks the units of every projection file before training. Outputs go to `<root>/output/prediction/<run.folder>/`: performance tables, the saved leader model, and predictions in `cmip5/` and `cmip6/`. Settings: 50 models, seed 160617, deep learning excluded. The consumptive run took 4 min 5 s on 24 cores.
 
 **NLDI.** Run `1_3a_wtr_div_nldi_spatial.R`, then `1_3b_wtr_div_nldi_analysis.R`. Both need the raw inputs (USGS streamflow, NLDI catchments, eWRIMS diversion points, FACTS and CAL FIRE thinning records, burn severity, OpenET, and DAYMET). Set the directory variables at the top of each script.
 
