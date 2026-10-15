@@ -1,8 +1,8 @@
 {
   "title": "Code and derived data for: Forest thinning and wildfire do not increase surface-water diversions in California",
   "upload_type": "software",
-  "version": "1.2.1",
-  "description": "<p>Conditional permutation importance, streamflow analyses, and AutoML projections of hydropower and consumptive surface-water diversions across California's HUC8 watersheds, water years 2011 to 2024, with projections to 2070 under CMIP5 and CMIP6. Includes the HUC8 input tables and the projection inputs. Version 1.2.1 adds the README and the licence to version 1.2.0.</p>",
+  "version": "1.3.0",
+  "description": "<p>Conditional permutation importance, streamflow analyses, and AutoML projections of hydropower and consumptive surface-water diversions across California's HUC8 watersheds, water years 2011 to 2024, with projections to 2070 under CMIP5 and CMIP6. Includes the HUC8 input tables and the projection inputs. Version 1.3.0 adds NLDI/3_3_wtr_div_nldi_fig.R, which computes the Fig. 4 regressions and the Fig. 5 station-level D/Q means and 95% confidence intervals, draws Figs 4 and 5 and Supplementary Fig. 10, and writes the Source Data for Figs 4 and 5.</p>",
   "creators": [
     {"name": "Chung, Min Gon", "affiliation": "Cooperative Institute for Research in Environmental Sciences, University of Colorado Boulder"},
     {"name": "Goulden, Michael L."},
