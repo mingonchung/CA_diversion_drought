@@ -1,6 +1,6 @@
 # CA_diversion_drought
 
-Code and derived data for Chung et al., "Forest thinning and wildfire do not increase surface-water diversions in California", *Nature Communications* (in revision).
+Code and derived data for Chung et al., "Forest thinning and wildfire do not increase surface-water diversions in California", *Nature Communications* (accepted).
 
 Conditional permutation importance (CPI), streamflow analyses, and AutoML projections of hydropower and consumptive surface-water diversions across California's HUC8 watersheds, water years 2011–2024, with projections to 2070.
 
@@ -8,7 +8,8 @@ Conditional permutation importance (CPI), streamflow analyses, and AutoML projec
 
 | Version | DOI | Contents |
 |---|---|---|
-| 1.2.1 | This release | README and licence added. Code and data are those of version 1.2.0 |
+| 1.3.0 | This release | `NLDI/3_3_wtr_div_nldi_fig.R` added: Fig. 4 regressions, Fig. 5 station-level D/Q means and 95% confidence intervals, Supplementary Fig. 10, and Source Data for Figs 4 and 5 |
+| 1.2.1 | 10.5281/zenodo.23145966 | README and licence added. Code and data are those of version 1.2.0 |
 | 1.2.0 | 10.5281/zenodo.23129939 | CMIP6 air temperature in °C, revised AutoML scripts, HUC8 table `CA_wtr_HUC8_all_040226.csv` added |
 | 1.1.0 | 10.5281/zenodo.20724105 | First revision. CMIP6 air temperature not converted from K |
 
@@ -27,7 +28,7 @@ Input_csv/   HUC8 input tables and projection inputs
 | `NLDI/` | Figs 4 and 5, Supplementary Fig. 10 |
 | `AutoML/` | Fig. 8, Supplementary Figs 6 and 11 |
 
-Figure scripts are not included.
+`NLDI/3_3_wtr_div_nldi_fig.R` computes the Fig. 4 and 5 statistics and draws Figs 4 and 5 and Supplementary Fig. 10. Other figure scripts are not included.
 
 Script names in `RF_CPI/` combine three labels.
 
@@ -45,14 +46,14 @@ Tested on Rocky Linux 8.10 (Alpine cluster, University of Colorado Boulder) with
 |---|---|
 | `RF_CPI/` | `party` (1.3.21), `permimp` (1.1.0.9000), `edarf` (1.1.1), `dplyr` (1.2.1), `tidyverse` (2.0.0), `tibble` (3.3.1), `reshape2` (1.4.5), `Rmisc` (1.5.1) |
 | `AutoML/` | `h2o` (3.44.0.3), `dplyr` (1.2.1), `tibble` (3.3.1), `lubridate` (1.9.5) |
-| `NLDI/` | `sf` (1.1.2), `dplyr` (1.2.1), `tidyr` (1.3.2), `readr` (2.2.0), `stringr` (1.6.0), `lubridate` (1.9.5), `reshape2` (1.4.5), `zoo` (1.8.15), `RcppRoll` (0.3.2) |
+| `NLDI/` | `sf` (1.1.2), `dplyr` (1.2.1), `tidyr` (1.3.2), `readr` (2.2.0), `stringr` (1.6.0), `lubridate` (1.9.5), `reshape2` (1.4.5), `zoo` (1.8.15), `RcppRoll` (0.3.2), `ggplot2` (4.0.3), `cowplot` (1.1.3), `scales` (1.4.0) |
 
 ## 2. Installation guide
 
 ```r
 install.packages(c("party", "dplyr", "tidyverse", "tibble", "reshape2", "Rmisc",
                    "h2o", "lubridate", "sf", "tidyr", "readr", "stringr", "zoo",
-                   "RcppRoll", "devtools"))
+                   "RcppRoll", "ggplot2", "cowplot", "scales", "devtools"))
 devtools::install_github("ddebeer/permimp")
 devtools::install_github("zmjones/edarf", subdir = "pkg")
 ```
@@ -92,7 +93,7 @@ Expected run time: 3 min 35 s on 24 cores. The script starts H2O with 32 GB of m
 
 **AutoML.** `4_wtr_h2o_pw_2070_frst_160617.R` (hydropower) and `4_wtr_h2o_con_2070_frst_160617.R` (consumptive) train on water years 2011–2024, hold out water years 2014, 2017, and 2019, and project to 2070. Each script checks the units of every projection file before training. Outputs go to `<root>/output/prediction/<run.folder>/`: performance tables, the saved leader model, and predictions in `cmip5/` and `cmip6/`. Settings: 50 models, seed 160617, deep learning excluded. The consumptive run took 4 min 5 s on 24 cores.
 
-**NLDI.** Run `1_3a_wtr_div_nldi_spatial.R`, then `1_3b_wtr_div_nldi_analysis.R`. Both need the raw inputs (USGS streamflow, NLDI catchments, eWRIMS diversion points, FACTS and CAL FIRE thinning records, burn severity, OpenET, and DAYMET). Set the directory variables at the top of each script.
+**NLDI.** Run `1_3a_wtr_div_nldi_spatial.R`, then `1_3b_wtr_div_nldi_analysis.R`, then `3_3_wtr_div_nldi_fig.R`. The first two need the raw inputs (USGS streamflow, NLDI catchments, eWRIMS diversion points, FACTS and CAL FIRE thinning records, burn severity, OpenET, and DAYMET). `3_3_wtr_div_nldi_fig.R` reads four outputs of `1_3b_wtr_div_nldi_analysis.R` (`R2_water_balance_annual.csv`, `QP_anomaly_monthly.csv`, `QP_anomaly_wildfire_monthly.csv`, and `R4_diversion_streamflow_ratio.csv`) and writes the figures and the Source Data for Figs 4 and 5. Set the directory variables at the top of each script.
 
 ## Input data
 
